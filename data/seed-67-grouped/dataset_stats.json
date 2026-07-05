@@ -1,0 +1,51 @@
+{
+  "seed": 67,
+  "train": {
+    "total": 66505,
+    "by_task": {
+      "Action": 32734,
+      "NER": 33771
+    },
+    "by_language": {
+      "ZH": 34902,
+      "EN": 31603
+    },
+    "by_source": {
+      "CPREX": 34902,
+      "USPTO-ORD": 30570,
+      "CHEMU": 1033
+    }
+  },
+  "valid": {
+    "total": 8197,
+    "by_task": {
+      "NER": 4162,
+      "Action": 4035
+    },
+    "by_language": {
+      "EN": 4017,
+      "ZH": 4180
+    },
+    "by_source": {
+      "USPTO-ORD": 3890,
+      "CPREX": 4180,
+      "CHEMU": 127
+    }
+  },
+  "test": {
+    "total": 8270,
+    "by_task": {
+      "NER": 4199,
+      "Action": 4071
+    },
+    "by_language": {
+      "EN": 3970,
+      "ZH": 4300
+    },
+    "by_source": {
+      "USPTO-ORD": 3842,
+      "CPREX": 4300,
+      "CHEMU": 128
+    }
+  }
+}

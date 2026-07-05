@@ -32,7 +32,7 @@ export STANDARDIZE_MODEL="${STANDARDIZE_MODEL:-gpt-4o}"
 export COREF_MODEL="${COREF_MODEL:-gpt-4o}"
 export API_KEY="${API_KEY:-${CHATGPT_API_KEY:-${OPENAI_API_KEY:-}}}"
 export BASE_URL="${BASE_URL:-${CHATGPT_BASE_URL:-${OPENAI_BASE_URL:-https://api.openai.com/v1}}}"
-VLLM_API_KEY="${VLLM_API_KEY:-token-abc123}"
+VLLM_API_KEY="${VLLM_API_KEY:-dummy-token}"
 VLLM_BASE_URL="${VLLM_BASE_URL:-http://localhost:8050/v1}"
 
 # ── SSL 证书（conda Python 编译时 CA 路径是占位符，需显式指向系统 CA bundle）──

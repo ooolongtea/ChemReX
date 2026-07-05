@@ -1,0 +1,20 @@
+{
+  "split_method": "GroupShuffleSplit on group_id",
+  "group_key": "group_id",
+  "record_key": "record_id",
+  "text_overlap": {
+    "train-valid": 0,
+    "train-test": 0,
+    "valid-test": 0
+  },
+  "group_overlap": {
+    "train-valid": 0,
+    "train-test": 0,
+    "valid-test": 0
+  },
+  "patent_overlap": {
+    "train-valid": 0,
+    "train-test": 0,
+    "valid-test": 0
+  }
+}

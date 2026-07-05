@@ -6,11 +6,11 @@
 #   bash reproduce_lora.sh Qwen3-8B        # 只跑指定模型
 #   bash reproduce_lora.sh qwen3-lora-08 Qwen3-8B   # 跑多个指定模型
 #   SMOKETEST=1 bash reproduce_lora.sh     # 只跑 --limit 20 冒烟测试
-#   BASE_URL=http://localhost:8050/v1 API_KEY=token-abc123 bash reproduce_lora.sh
+#   BASE_URL=http://localhost:8050/v1 API_KEY=dummy-token bash reproduce_lora.sh
 #
 # 环境变量:
 #   BASE_URL    vLLM 服务地址        (默认 http://localhost:8050/v1)
-#   API_KEY     API key              (默认 token-abc123)
+#   API_KEY     API key              (默认 dummy-token)
 #   DATA        测试集路径           (默认 ../data/seed-67/test.json)
 #   MAX_TOKENS  最大生成 token       (默认 512)
 #   WORKERS     并发数               (默认 32)
@@ -25,7 +25,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVAL_PY="${SCRIPT_DIR}/evaluate.py"
 
 BASE_URL="${BASE_URL:-http://localhost:8050/v1}"
-API_KEY="${API_KEY:-token-abc123}"
+API_KEY="${API_KEY:-dummy-token}"
 DATA="${DATA:-${SCRIPT_DIR}/../data/seed-67/test.json}"
 MAX_TOKENS="${MAX_TOKENS:-512}"
 WORKERS="${WORKERS:-32}"

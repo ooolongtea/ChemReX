@@ -7,6 +7,7 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+.codegraph
 
 # ---- Virtual environments ----
 .venv/
@@ -45,6 +46,12 @@ eval/eval_reports/*.svg
 # ---- Legacy local archive ----
 MAReX_training_code/
 
+# ---- Training code (not released) ----
+training/
+
+# ---- Dataset processing & splitting code (not released) ----
+dataset/
+
 # ---- Example run outputs ----
 examples/**/pipeline_result.json
 examples/**/pipeline_result_coref.json
@@ -73,3 +80,5 @@ logs/
 *.swo
 .DS_Store
 Thumbs.db
+# Large file — keep compressed train.json.gz instead
+data/seed-67-grouped/train.json

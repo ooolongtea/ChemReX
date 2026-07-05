@@ -65,7 +65,7 @@ MODEL_PRESETS = {
     "qwen3-lora-08": {
         "model": "qwen3-lora-08",
         "base_url": "http://localhost:8050/v1",
-        "api_key": "token-abc123",
+        "api_key": "dummy-token",
         "temperature": 0.0,
         "max_tokens": 512,
         "enable_thinking": False,

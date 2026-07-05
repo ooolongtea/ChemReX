@@ -16,7 +16,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUN_PY="${SCRIPT_DIR}/run_reactionseek.py"
 
 BASE_URL="${BASE_URL:-http://localhost:8050/v1}"
-API_KEY="${API_KEY:-token-abc123}"
+API_KEY="${API_KEY:-dummy-token}"
 MODEL="${MODEL:-Qwen3-8B}"
 MAX_TOKENS="${MAX_TOKENS:-1024}"
 MAX_WORKERS="${MAX_WORKERS:-32}"

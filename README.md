@@ -7,9 +7,8 @@ ChemReX is a modular system for extracting structured chemical reaction records 
 1. [Overview](#1-overview)
 2. [Installation](#2-installation)
 3. [Usage](#3-usage)
-4. [Training](#4-training)
-5. [Evaluation](#5-evaluation)
-6. [Citation](#6-citation)
+4. [Evaluation](#4-evaluation)
+5. [Citation](#5-citation)
 
 ## 1. Overview
 
@@ -54,7 +53,7 @@ Note: copying `.env.example` may set `EXTRACTION_PRESET=deepseek-v4-pro`. For th
 
 ### 2.2 Default Local Model for M1
 
-The default M1 preset is `qwen3-lora-08`, served by a local vLLM OpenAI-compatible server. Place the base model and LoRA adapter under:
+The default M1 preset is `qwen3-lora-08`, served by a local vLLM OpenAI-compatible server. The LoRA weights will be released upon acceptance. Place the base model and LoRA adapter under:
 
 ```text
 model/
@@ -74,7 +73,7 @@ Start the service:
 bash scripts/serve_vllm.sh
 ```
 
-The default service endpoint is `http://localhost:8050/v1`, model id `qwen3-lora-08`, API key `token-abc123`.
+The default service endpoint is `http://localhost:8050/v1`, model id `qwen3-lora-08`, API key `dummy-token`.
 
 Alternatively, use an external OpenAI-compatible model:
 
@@ -141,7 +140,7 @@ Batch JSONL input:
 
 ```bash
 python run_pipeline.py extract \
-  --input data/seed-67/test.jsonl \
+  --input data/seed-67-grouped/test.jsonl \
   --output results/m1_predictions.jsonl \
   --max-workers 32
 ```
@@ -194,50 +193,11 @@ python run_pipeline.py chain \
 
 If an optional input is missing, the corresponding module is skipped with a warning.
 
-## 4. Training
-
-The reviewer-facing MAReX training code is in `training/`. The legacy
-`MAReX_training_code/` directory is kept only as a local archive and is ignored
-by git.
-
-The pre-split dataset is provided under `data/seed-67/` (`train`, `valid`,
-`test`). Because it exceeds GitHub's 100 MB file limit, the training split is
-shipped gzip-compressed. Decompress it before training:
-
-```bash
-gunzip -k data/seed-67/train.json.gz   # produces data/seed-67/train.json
-```
-
-Generate training data if needed:
-
-```bash
-cd training
-python data/generate_dataset.py \
-  --meta data/meta.json \
-  --instructions data/instructions.md \
-  --output data \
-  --seed 67 \
-  --train-ratio 0.8 \
-  --valid-ratio 0.1 \
-  --test-ratio 0.1
-```
-
-Run Qwen3-8B LoRA/QLoRA training:
-
-```bash
-cd training
-python train.py
-```
-
-Edit the `CONFIG` block in `training/train.py` to set local model/data paths,
-GPU ids, and hyperparameters. See `training/README.md` for the complete
-training-code description.
-
-## 5. Evaluation
+## 4. Evaluation
 
 ChemReX includes two evaluation settings: NER+Action extraction and end-to-end grounding.
 
-### 5.1 NER + Action Evaluation
+### 4.1 NER + Action Evaluation
 
 Run model inference and compute metrics:
 
@@ -246,7 +206,7 @@ python eval/evaluate.py \
   --model_type lora \
   --base_model_path model/Qwen3-8B \
   --adapter_path model/qwen3-lora-08 \
-  --data data/seed-67/test.json \
+  --data data/seed-67-grouped/test.json \
   --save_predictions
 ```
 
@@ -256,7 +216,7 @@ Evaluate an external OpenAI-compatible model:
 python eval/evaluate.py \
   --model_type external \
   --external_model deepseek-v4-pro \
-  --data data/seed-67/test.json \
+  --data data/seed-67-grouped/test.json \
   --save_predictions
 ```
 
@@ -265,7 +225,7 @@ Recompute metrics from an existing prediction file:
 ```bash
 python eval/verify_metrics.py \
   results/<experiment>/predictions.jsonl \
-  --data data/seed-67/test.json
+  --data data/seed-67-grouped/test.json
 ```
 
 The main metrics are:
@@ -273,7 +233,7 @@ The main metrics are:
 - **NER**: micro F1 and per-field F1 over the seven reaction fields.
 - **Action**: BLEU-4, ROUGE-L, exact match, and BERTScore.
 
-### 5.2 End-to-End Grounding Evaluation
+### 4.2 End-to-End Grounding Evaluation
 
 The end-to-end evaluation measures the full grounding chain:
 
@@ -302,7 +262,7 @@ Outputs are written to `eval/end2end/outputs/`:
 
 The primary end-to-end metrics are identifier-to-SMILES grounding F1 and strict end-to-end grounding accuracy. Additional diagnostics include text identifier recognition, figure label OCR, molecule box detection, OCSR exact match, link F1, and error-type counts.
 
-## 6. Citation
+## 5. Citation
 
 ```bibtex
 @inproceedings{chemrex2025,
