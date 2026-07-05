@@ -1,0 +1,8 @@
+{
+  "compound_standardization": "v2",
+  "coref_resolution": "v1",
+  "ner_zh": "v1",
+  "ner_en": "v1",
+  "action_zh": "v1",
+  "action_en": "v1"
+}

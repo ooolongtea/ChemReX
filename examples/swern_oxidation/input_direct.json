@@ -1,0 +1,27 @@
+{
+  "test_index": 3497,
+  "task_type": "NER",
+  "language": "EN",
+  "source": "USPTO-ORD",
+  "scenario": "direct — 文本使用真实化合物名，NER 直接得到可标准化名称，无需指代消解",
+  "procedure_text": "To a solution of 15.9 mL (182.65 mmol, 1.2 eq) of oxalyl chloride in 300 mL of CH2Cl2 at -78° C. under argon is added dropwise 25.9 mL (365.3 mmol, 2.4 eq) of DMSO in 40 mL of CH2Cl2. After stirring for 1 hour at -78° C., 25 g (152.21 mmol) of 5-phenylpentan-1-ol dissolved in 40 mL of CH2Cl2 is added dropwise. After stirring for 2 hour at -78° C., 106 mL (761.03 mmol, 5 eq) of triethylamine is added dropwise. This then stirred at -78° C. for 1 hours then at 25° C. for overnight. The reaction is partitioned between CH2Cl2 and 1 N HCl. The organic layer is washed well with water, dried over anhydrous MgSO4 and concentrated in vacuo to afford 23.52 g (95%) of 5-phenylpentanal in the form of a yellow oil.",
+  "ground_truth_fields": {
+    "starting_material": "5-phenylpentan-1-ol",
+    "reaction_product": "5-phenylpentanal",
+    "reagent_catalyst": "oxalyl chloride; DMSO; triethylamine",
+    "solvent": "CH2Cl2",
+    "temperature": "-78°C; 25°C",
+    "time": "1 hour; 2 hour; 1 hours; overnight",
+    "yield_percent": "95%"
+  },
+  "smiles_ground_truth": {
+    "5-phenylpentan-1-ol": "OCCCCCc1ccccc1",
+    "5-phenylpentanal": "O=CCCCCc1ccccc1",
+    "oxalyl chloride": "O=C(Cl)C(=O)Cl",
+    "DMSO": "CS(C)=O",
+    "triethylamine": "CCN(CC)CC",
+    "CH2Cl2": "ClCCl"
+  },
+  "reaction_smiles": "OCCCCCc1ccccc1>>O=CCCCCc1ccccc1",
+  "note": "Swern oxidation, 真实化合物名。校验：standardize 级联应直接给出全部 SMILES，coref 无标识符 (total_identifiers=0)。"
+}

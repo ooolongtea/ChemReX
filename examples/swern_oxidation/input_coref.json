@@ -1,0 +1,27 @@
+{
+  "test_index": 3497,
+  "task_type": "NER",
+  "language": "EN",
+  "source": "USPTO-ORD",
+  "scenario": "coref — 文本用编号 1a/2a 替换原料与产物，必须靠图像 dict_result 做 ID→SMILES 映射",
+  "procedure_text": "To a solution of oxalyl chloride (1.2 eq) in CH2Cl2 at -78 °C under argon is added dropwise DMSO (2.4 eq) in CH2Cl2. After stirring for 1 hour at -78 °C, a solution of 1a (1.0 eq) in CH2Cl2 is added dropwise. After stirring for 2 hours at -78 °C, triethylamine (5.0 eq) is added dropwise, and the mixture is stirred at -78 °C for 1 hour, then warmed to 25 °C and stirred overnight. The reaction is partitioned between CH2Cl2 and 1 N HCl, and the organic layer is washed with water, dried over MgSO4, and concentrated in vacuo to afford 2a (95%) as a yellow oil.",
+  "ground_truth_fields": {
+    "starting_material": "1a",
+    "reaction_product": "2a",
+    "reagent_catalyst": "oxalyl chloride; DMSO; triethylamine",
+    "solvent": "CH2Cl2",
+    "temperature": "-78°C; 25°C",
+    "time": "1 hour; 2 hours; 1 hour; overnight",
+    "yield_percent": "95%"
+  },
+  "smiles_ground_truth": {
+    "1a (5-phenyl-1-pentanol)": "OCCCCCc1ccccc1",
+    "2a (5-phenylpentanal)": "O=CCCCCc1ccccc1",
+    "oxalyl chloride": "O=C(Cl)C(=O)Cl",
+    "DMSO": "CS(C)=O",
+    "triethylamine": "CCN(CC)CC",
+    "CH2Cl2": "ClCCl"
+  },
+  "reaction_smiles": "OCCCCCc1ccccc1>>O=CCCCCc1ccccc1",
+  "note": "Swern oxidation, 原料/产物用编号 1a/2a。校验：coref 应 resolved=2, id_smiles_mapping={1a: OCCCCCc1ccccc1, 2a: O=CCCCCc1ccccc1}，与图像 dict_result 对齐。"
+}

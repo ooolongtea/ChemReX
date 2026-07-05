@@ -1,0 +1,28 @@
+{
+  "test_index": 3497,
+  "task_type": "NER",
+  "language": "EN",
+  "source": "USPTO-ORD",
+  "procedure_text": "To a solution of 15.9 mL (182.65 mmol, 1.2 eq) of oxalyl chloride in 300 mL of CH2Cl2 at -78° C. under argon is added dropwise 25.9 mL (365.3 mmol, 2.4 eq) of DMSO in 40 mL of CH2Cl2. After stirring for 1 hour at -78° C., 25 g (152.21 mmol) of 5-phenylpentan-1-ol dissolved in 40 mL of CH2Cl2 is added dropwise. After stirring for 2 hour at -78° C., 106 mL (761.03 mmol, 5 eq) of triethylamine is added dropwise. This then stirred at -78° C. for 1 hours then at 25° C. for overnight. The reaction is partitioned between CH2Cl2 and 1 N HCl. The organic layer is washed well with water, dried over anhydrous MgSO4 and concentrated in vacuo to afford 23.52 g (95%) of 5-phenylpentanal in the form of a yellow oil.",
+  "procedure_text_original": "To a solution of 15.9 mL (182.65 mmol, 1.2 eq) of oxalyl chloride in 300 mL of CH2Cl2 at -78° C. under argon is added dropwise 25.9 mL (365.3 mmol, 2.4 eq) of DMSO in 40 mL of CH2Cl2. After stirring for 1 hour at -78° C., 25 g (152.21 mmol) of 5-phenyl-1-pentanol dissolved in 40 mL of CH2Cl2 is added dropwise. After stirring for 2 hour at -78° C., 106 mL (761.03 mmol, 5 eq) of triethylamine is added dropwise. This then stirred at -78° C. for 1 hours then at 25° C. for overnight. The reaction is partitioned between CH2Cl2 and 1 N HCl. The organic layer is washed well with water, dried over anhydrous MgSO4 and concentrated in vacuo to afford 23.52 g (95%) of 5-phenylpentanal in the form of a yellow oil.",
+  "coref_note": "Deliberately replaced compound names with identifiers 1a (starting material) and 2a (product) to exercise coreference resolution (text ID -> image SMILES).",
+  "ground_truth_fields": {
+    "starting_material": "1a",
+    "reaction_product": "2a",
+    "reagent_catalyst": "oxalyl chloride; DMSO; triethylamine",
+    "solvent": "CH2Cl2",
+    "temperature": "-78°C; 25°C",
+    "time": "1 hour; 2 hour; 1 hours; overnight",
+    "yield_percent": "95%"
+  },
+  "smiles_ground_truth": {
+    "1a (5-phenyl-1-pentanol)": "OCCCCCc1ccccc1",
+    "2a (5-phenylpentanal)": "O=CCCCCc1ccccc1",
+    "oxalyl chloride": "O=C(Cl)C(=O)Cl",
+    "DMSO": "CS(C)=O",
+    "triethylamine": "CCN(CC)CC",
+    "CH2Cl2": "ClCCl"
+  },
+  "reaction_smiles": "OCCCCCc1ccccc1>>O=CCCCCc1ccccc1",
+  "note": "Swern oxidation. One reactant, one product, all 7 NER fields. Text uses IDs 1a/2a (coref); image draws structures labeled 1a/2a + conditions."
+}

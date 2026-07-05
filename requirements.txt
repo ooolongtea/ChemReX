@@ -1,0 +1,40 @@
+# ChemReX 主环境 / 文本管线 (retroparser, Python 3.10)
+# ──────────────────────────────────────────────────────────────────────────────
+# 运行 M1 抽取 / M3 指代消解 / M4 验证 / 数据集构建 / 训练 / 评估均使用此环境。
+# 训练与在线评估需要 NVIDIA GPU（实测 CUDA 12.4，torch 2.6.0+cu124）。
+#
+# 图像模块 (M2) 依赖较重且与 PyTorch/CUDA 版本强绑定，运行在独立环境 imgparser，
+# 详见 requirements-imgparser.txt 与 README_CN.md「安装」一节。
+# PaddleOCR 子进程运行在独立环境 paddle（仅 `conda run -n paddle` 调用）。
+
+# ── 核心运行时：M1 抽取 / M3 标准化+coref / M4 验证 ──
+openai>=1.0            # OpenAI 兼容 LLM 客户端（M1 推理 / M3 标准化 / M3 coref）
+python-dotenv>=1.0     # .env 配置加载
+loguru>=0.7            # 日志
+requests>=2.31         # PubChem / CIR 网络请求 (pipeline/utils.py)
+python-frontmatter>=1.0  # Prompt 模板 YAML frontmatter 解析
+
+# name→SMILES 级联解析（M3 标准化）
+cirpy>=1.0.2           # Chemical Identifier Resolver
+pubchempy>=1.0.4       # PubChem 查询
+pyopsin>=0.2.4         # OPSIN 名称→SMILES（注意：PyPI 最新即为 0.2.4）
+rdkit>=2023.9          # 结构规范化 / 验证候选构造
+rxnmapper>=0.4.3       # M4 反应原子映射置信度
+
+# ── 数据集构建 (dataset/split_data.py: train_test_split) ──
+scikit-learn>=1.3
+
+# ── 评估指标 (eval/eval.py, eval/verify_metrics.py) ──
+nltk>=3.8              # Action BLEU-4 (sentence_bleu + SmoothingFunction)
+bert-score>=0.3.12     # Action BERTScore 语义相似度
+matplotlib>=3.7        # eval_reports 跨语言/雷达图等结果可视化
+
+# ── 训练 / 在线评估深度学习栈 (train.py, eval/evaluate.py) ──
+# 实测版本：torch 2.6.0+cu124 / transformers 4.57.1 / peft 0.19.1
+# 请按本机 CUDA 版本选择 torch wheel，参见 https://pytorch.org/get-started/locally/
+torch>=2.0
+transformers>=4.40
+peft>=0.10             # QLoRA (LoRA rank=16, 4-bit NF4)
+bitsandbytes>=0.43     # 4-bit 量化
+accelerate>=0.30
+tqdm>=4.65             # 推理/评估进度条
