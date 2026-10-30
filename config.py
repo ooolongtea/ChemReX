@@ -24,6 +24,9 @@ def _env(name: str, default: str = "") -> str:
 DEEPSEEK_API_KEY = _env("DEEPSEEK_API_KEY")
 DEEPSEEK_BASE_URL = _env("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 DEEPSEEK_V4_PRO_MODEL = _env("DEEPSEEK_V4_PRO_MODEL", "deepseek-v4-pro")
+MAAS_API_KEY = _env("MAAS_API_KEY")
+MAAS_BASE_URL = _env("MAAS_BASE_URL", "https://api.modelarts-maas.com/v2/chat/completions")
+MAAS_MODEL = _env("MAAS_MODEL", "deepseek-v4.1-flash-1017")
 CHATGPT_API_KEY = _env("CHATGPT_API_KEY", _env("OPENAI_API_KEY"))
 CHATGPT_BASE_URL = _env(
     "CHATGPT_BASE_URL",
@@ -44,6 +47,15 @@ EXTRACTION_TIMEOUT = int(os.getenv("EXTRACTION_TIMEOUT", "300"))
 # 用 --preset <name> 选择；预设覆盖 model/base_url/api_key/temperature/max_tokens/enable_thinking。
 # 优先级：显式 CLI 参数 > 预设 > 环境变量 > 上方默认值。
 MODEL_PRESETS = {
+    "huawei-maas": {
+        "model": MAAS_MODEL,
+        "base_url": MAAS_BASE_URL,
+        "api_key": MAAS_API_KEY,
+        "temperature": 0.0,
+        "max_tokens": 512,
+        "enable_thinking": False,
+        "description": "Huawei ModelArts MaaS. Configure MAAS_API_KEY; MAAS_MODEL and MAAS_BASE_URL are optional.",
+    },
     "deepseek-v4-pro": {
         "model": DEEPSEEK_V4_PRO_MODEL,
         "base_url": DEEPSEEK_BASE_URL,
@@ -64,8 +76,8 @@ MODEL_PRESETS = {
     },
     "qwen3-lora-08": {
         "model": "qwen3-lora-08",
-        "base_url": "http://localhost:8050/v1",
-        "api_key": "dummy-token",
+        "base_url": os.getenv("QWEN3_LORA_BASE_URL", "http://localhost:8050/v1"),
+        "api_key": os.getenv("QWEN3_LORA_API_KEY", "token-abc123"),
         "temperature": 0.0,
         "max_tokens": 512,
         "enable_thinking": False,
@@ -74,15 +86,25 @@ MODEL_PRESETS = {
 }
 # M1 默认预设：Qwen3-8B + LoRA 0.8（需本地启动 vLLM 并挂载该 LoRA adapter）
 EXTRACTION_PRESET = os.getenv("EXTRACTION_PRESET", "qwen3-lora-08")
+# 方案模板段落（scheme_template 提示词，一段多步反应）超出 LoRA 单步微调的
+# 分布：交给 MaaS 的 deepseek-v4.1-flash-1017；常规中文 NER 仍走 EXTRACTION_PRESET。
+SCHEME_EXTRACTION_PRESET = os.getenv("SCHEME_EXTRACTION_PRESET", "huawei-maas")
 
 # ── 模块3 数据标准化（name→SMILES 级联）──
 STANDARDIZE_MODEL = os.getenv("STANDARDIZE_MODEL", CHATGPT_MODEL)
+STANDARDIZE_PROVIDER = os.getenv("STANDARDIZE_PROVIDER", "")
 STANDARDIZE_TEMPERATURE = 0.0
-STANDARDIZE_USE_OPSIN = True
+STANDARDIZE_USE_OPSIN = _env("STANDARDIZE_USE_OPSIN", "1").lower() not in ("0", "false", "no")
 
 # ── 模块4 指代消解（ID→SMILES 映射）──
 COREF_MODEL = os.getenv("COREF_MODEL", CHATGPT_MODEL)
+COREF_PROVIDER = os.getenv("COREF_PROVIDER", "")
 COREF_TEMPERATURE = 0.0
+
+# ── 文档级最终产物提取（摘要区域，路线方向）──
+FINAL_PRODUCT_MODEL = os.getenv("FINAL_PRODUCT_MODEL", COREF_MODEL)
+FINAL_PRODUCT_PROVIDER = os.getenv("FINAL_PRODUCT_PROVIDER", "")
+FINAL_PRODUCT_TEMPERATURE = 0.0
 
 # ── 路径 ──
 RAW_DATA_DIR = DATA_DIR / "raw"

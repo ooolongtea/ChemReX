@@ -7,7 +7,6 @@ __pycache__/
 *.egg-info/
 build/
 dist/
-.codegraph
 
 # ---- Virtual environments ----
 .venv/
@@ -25,15 +24,44 @@ miniforge3/
 data/raw/
 data/processed/
 data/outputs/
-
-# Large training split exceeds GitHub 100MB limit
-data/seed-67/train.json
+data/md/
+data/pdf/
+data/seed-*/
 
 training/data/seed-*/
 
 # ---- Run results / artifacts ----
 results/
 training/*-LoRA-*/
+
+# ---- Request-timing probe runtime artifacts ----
+# Raw request log is 2.3MB runtime data; report.md/summary.json keep the findings.
+doc/request-timing-*/requests.jsonl
+doc/request-timing-*/collector-pid.json
+doc/request-timing-*/progress.json
+doc/request-timing-*/state.json
+doc/request-timing-*/window.json
+
+# ---- Batch operation state (keep files locally for resume) ----
+doc/pause-*/state.json
+doc/pause-*/verification.json
+
+# ---- Quality repair / acceptance runtime bundles ----
+# Keep source, tests and concise reports in Git. PDFs, page images, raw model
+# responses, inventories, scan lists and process state stay at their run paths.
+doc/bug-localization-*/*.json
+
+/doc/reaction-quality-repair-20261013/*
+!/doc/reaction-quality-repair-20261013/bug-evidence.md
+!/doc/reaction-quality-repair-20261013/confirmed-source-defects.json
+
+/doc/reaction-quality-acceptance-handoff-20261015/*
+!/doc/reaction-quality-acceptance-handoff-20261015/*.md
+!/doc/reaction-quality-acceptance-handoff-20261015/build_evidence.py
+
+/doc/production-repair-20261016/*
+!/doc/production-repair-20261016/README.md
+!/doc/production-repair-20261016/*.py
 
 # ---- Eval outputs ----
 eval/end2end/outputs/
@@ -45,12 +73,6 @@ eval/eval_reports/*.svg
 
 # ---- Legacy local archive ----
 MAReX_training_code/
-
-# ---- Training code (not released) ----
-training/
-
-# ---- Dataset processing & splitting code (not released) ----
-dataset/
 
 # ---- Example run outputs ----
 examples/**/pipeline_result.json
@@ -80,5 +102,3 @@ logs/
 *.swo
 .DS_Store
 Thumbs.db
-# Large file — keep compressed train.json.gz instead
-data/seed-67-grouped/train.json

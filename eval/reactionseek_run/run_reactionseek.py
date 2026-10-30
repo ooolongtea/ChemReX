@@ -68,7 +68,7 @@ def main():
     parser.add_argument("--output_dir", default=None, help="Output directory for predictions.jsonl")
     parser.add_argument("--model", default="Qwen3-8B", help="Served model name")
     parser.add_argument("--base_url", default="http://localhost:8050/v1", help="vLLM OpenAI-compatible base URL")
-    parser.add_argument("--api_key", default="dummy-token", help="API key")
+    parser.add_argument("--api_key", default="token-abc123", help="API key")
     parser.add_argument("--max_tokens", type=int, default=1024, help="Max tokens per generation")
     parser.add_argument("--temperature", type=float, default=0.0, help="Sampling temperature")
     parser.add_argument("--max_workers", type=int, default=32, help="Concurrent API workers")

@@ -14,6 +14,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 from loguru import logger
 
+from pipeline.versions import IMAGE_PIPELINE_VERSION
+
 from .rxn_ocr import RxnOCR, flatten_reactions
 from .coref_ocr import DictGenerator
 
@@ -88,14 +90,51 @@ def _find_image_dir(base_path: str) -> Optional[str]:
 
 
 class ImagePipeline:
-    """Sequential image processing: dict generation → reaction recognition. No position linking."""
+    """Sequential image processing: dict generation → reaction recognition. No position linking.
 
-    def __init__(self):
+    ``resident_models=True`` keeps the OCR/OCSR models loaded between ``run()``
+    calls (batch mode: load once, process many documents). The default
+    (False) preserves the original load → run → release behaviour.
+    """
+
+    def __init__(self, resident_models: bool = False):
         try:
             import config
             self.paddle_env = getattr(config, "PADDLE_CONDA_ENV", "paddle")
         except ImportError:
             self.paddle_env = os.getenv("PADDLE_CONDA_ENV", "paddle")
+        self.resident_models = resident_models
+        self._resident: Dict[str, Any] = {}
+
+    # ── model factories (cached when resident_models=True) ──
+    def _get_dict_generator(self, gpu_ids: List[int]):
+        if "dict_generator" in self._resident:
+            return self._resident["dict_generator"], None
+        model, device = _try_initialize_model(
+            DictGenerator, gpu_ids, use_paddle_ocr=True, paddle_env=self.paddle_env,
+        )
+        if self.resident_models and model is not None:
+            self._resident["dict_generator"] = model
+        return model, device
+
+    def _get_rxn_ocr(self, gpu_ids: List[int]):
+        if "rxn_ocr" in self._resident:
+            return self._resident["rxn_ocr"], None
+        model, device = _try_initialize_model(
+            RxnOCR, gpu_ids, keep_crops=False, use_paddle_ocr=True, paddle_env=self.paddle_env,
+        )
+        if self.resident_models and model is not None:
+            self._resident["rxn_ocr"] = model
+        return model, device
+
+    def release(self) -> None:
+        """Drop cached resident models and free GPU memory."""
+        self._resident.clear()
+        import gc
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
 
     def run(self, image_base_path: str, return_per_image: bool = False) -> Dict[str, Any]:
         """Run image mining on a directory of images.
@@ -111,9 +150,11 @@ class ImagePipeline:
         start_time = time.time()
         request_id = f"local_{int(time.time() * 1000)}"
 
-        available_gpus = _get_available_gpus(min_free_memory_mb=10000)
+        min_free_memory_mb = int(os.getenv("BATCH_IMAGE_MIN_FREE_MB", "10000"))
+        available_gpus = _get_available_gpus(min_free_memory_mb=min_free_memory_mb)
         gpu_ids = [g[0] for g in available_gpus]
         paddle_gpu = gpu_ids[0] if gpu_ids else None
+        batch_size = max(1, int(os.getenv("BATCH_IMAGE_BATCH_SIZE", "16")))
 
         img_dir = _find_image_dir(image_base_path)
         if not img_dir:
@@ -132,59 +173,82 @@ class ImagePipeline:
             logger.warning(f"No images found in {img_dir}")
             return {"dict_result": {}, "image_result": []}
 
-        logger.info(f"[{request_id}] Processing {len(rxn_images)} images...")
+        logger.info(f"[{request_id}] Processing {len(rxn_images)} images (batch_size={batch_size})...")
 
         # Step 1: compound dictionary (MolDetect + MolOCR + PaddleOCR)
         compound_dict: Dict[str, str] = {}
         per_image_detections: List[Dict[str, Any]] = []
         dict_generator = None
+        errors: List[str] = []
+        failed_images: List[Dict[str, str]] = []
+        dict_failed = False
         try:
             if paddle_gpu is not None:
                 os.environ["PADDLE_OCR_GPU"] = str(paddle_gpu)
-            dict_generator, _ = _try_initialize_model(
-                DictGenerator, gpu_ids, use_paddle_ocr=True, paddle_env=self.paddle_env,
-            )
+            dict_generator, _ = self._get_dict_generator(gpu_ids)
             if dict_generator is not None:
                 dict_result = dict_generator.generate_batch_fused(
-                    rxn_images, batch_size=None, keep_duplicates=False,
+                    rxn_images, batch_size=batch_size, keep_duplicates=False,
                     return_per_image=return_per_image,
                 )
                 compound_dict = dict_result.get("map", {})
+                failed_images.extend(
+                    dict(item, stage="dictionary")
+                    for item in dict_result.get("failed_images", []))
                 if return_per_image:
                     per_image_detections = dict_result.get("per_image", [])
+            else:
+                dict_failed = True
+                errors.append("dict generation model could not be initialized")
         except Exception as e:
             logger.error(f"[{request_id}] Dict generation failed: {e}")
             compound_dict = {}
+            dict_failed = True
+            errors.append(f"dict generation failed: {e}")
+            failed_images.append({"image": "*", "stage": "dictionary", "error": str(e)[:300]})
         finally:
-            if dict_generator is not None:
+            if dict_generator is not None and not self.resident_models:
                 del dict_generator
-            if torch.cuda.is_available():
+            if not self.resident_models and torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
 
         # Step 2: reaction recognition (RxnScribe + MolOCR + PaddleOCR)
         rxn_batch: List[Dict[str, Any]] = []
         rxn_ocr = None
+        rxn_failed = False
         try:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
             if paddle_gpu is not None:
                 os.environ["PADDLE_OCR_GPU"] = str(paddle_gpu)
-            rxn_ocr, _ = _try_initialize_model(
-                RxnOCR, gpu_ids, keep_crops=False, use_paddle_ocr=True, paddle_env=self.paddle_env,
-            )
+            rxn_ocr, _ = self._get_rxn_ocr(gpu_ids)
             if rxn_ocr is not None:
-                rxn_batch = rxn_ocr.predict_images(rxn_images, batch_size=None, molscribe=True, ocr_type="paddle")
+                rxn_batch = rxn_ocr.predict_images(rxn_images, batch_size=batch_size, molscribe=True, ocr_type="paddle")
+                failed_images.extend(
+                    {"image": item["image"], "stage": "reaction", "error": item["error"]}
+                    for item in rxn_batch if item.get("error"))
+            else:
+                rxn_failed = True
+                errors.append("reaction recognition model could not be initialized")
         except Exception as e:
             logger.error(f"[{request_id}] Reaction recognition failed: {e}")
             rxn_batch = []
+            rxn_failed = True
+            errors.append(f"reaction recognition failed: {e}")
+            failed_images.append({"image": "*", "stage": "reaction", "error": str(e)[:300]})
         finally:
-            if rxn_ocr is not None:
+            if rxn_ocr is not None and not self.resident_models:
                 del rxn_ocr
-            if torch.cuda.is_available():
+            if not self.resident_models and torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
+
+        # Both stages down: fail loudly instead of returning an empty "ok"
+        # result (the worker turns `errors` into status:"error").
+        if dict_failed and rxn_failed:
+            raise RuntimeError("image pipeline failed: " + "; ".join(errors))
 
         # Flatten & format (NO position linking — no page_idx/bbox)
         image_result = []
@@ -199,7 +263,14 @@ class ImagePipeline:
 
         elapsed = time.time() - start_time
         logger.info(f"[{request_id}] Done | {elapsed:.1f}s | dict={len(compound_dict)} | image_rxns={len(image_result)}")
-        result = {"dict_result": compound_dict, "image_result": image_result}
+        result = {"dict_result": compound_dict, "image_result": image_result,
+                  "failed_images": failed_images,
+                  "image_failures": len(failed_images),
+                  "image_pipeline_version": IMAGE_PIPELINE_VERSION}
         if return_per_image:
             result["per_image_detections"] = per_image_detections
+        if failed_images:
+            logger.warning("[{}] {} image-stage failures", request_id, len(failed_images))
+        if errors:
+            result["errors"] = errors
         return result

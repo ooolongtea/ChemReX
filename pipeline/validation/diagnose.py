@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from .build_candidates import ReactionCandidate
+from .atom_sources import check_atom_sources, contributes_carbon
 
 
 @dataclass
@@ -43,6 +44,27 @@ def diagnose_candidates(
     base = next((candidate for candidate in candidates if candidate.kind == "base"), candidates[0])
     ranked = sorted(candidates, key=lambda candidate: candidate.confidence, reverse=True)
     best = ranked[0]
+
+    left = {c.canonical_smiles for c in base.left_compounds if c.canonical_smiles}
+    products = {c.canonical_smiles for c in base.products if c.canonical_smiles}
+    if left and products and products.issubset(left):
+        return Diagnosis(
+            diagnosis="identity_reaction", status="non_reaction",
+            needs_human_review=False, reason="product_structure_is_a_reactant",
+            base_candidate=base, best_candidate=best,
+        )
+
+    carbon = check_atom_sources(base.expression, base.mapped_rxn)
+    if carbon["status"] == "incomplete":
+        repairs = [c for c in candidates if c.kind == "with_reagent"
+                   and c.confidence >= confidence_threshold
+                   and check_atom_sources(c.expression, c.mapped_rxn)["status"] == "complete"
+                   and contributes_carbon(c)]
+        if len(repairs) == 1:
+            return Diagnosis("missing_atom_contributing_reagent", "patch_candidate", False,
+                             "source_supported_reagent_closes_carbon_gap", base, repairs[0])
+        return Diagnosis("missing_atom_source", "needs_review", True,
+                         "carbon_source_incomplete_or_ambiguous", base, best)
 
     if base.confidence >= confidence_threshold:
         return Diagnosis(

@@ -1,6 +1,8 @@
 {
   "ner_zh": "v1",
-  "ner_en": "v1",
   "action_zh": "v1",
-  "action_en": "v1"
+  "ner_en": "v2",
+  "action_en": "v2",
+  "ner_zh_scheme_template": "v2",
+  "ner_en_scheme_template": "v2"
 }

@@ -12,6 +12,7 @@ openai>=1.0            # OpenAI 兼容 LLM 客户端（M1 推理 / M3 标准化 
 python-dotenv>=1.0     # .env 配置加载
 loguru>=0.7            # 日志
 requests>=2.31         # PubChem / CIR 网络请求 (pipeline/utils.py)
+pypdf>=6.2            # 本地读取 PDF 文本以自动选择中文/英文抽取路由
 python-frontmatter>=1.0  # Prompt 模板 YAML frontmatter 解析
 
 # name→SMILES 级联解析（M3 标准化）

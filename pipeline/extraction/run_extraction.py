@@ -141,7 +141,7 @@ def main():
                              "预设覆盖 model/base_url/api_key/temperature/max_tokens/enable_thinking。")
     parser.add_argument("--model", type=str, default=None, help="覆盖模型名（如 qwen3-lora-08 / Qwen3-8B）")
     parser.add_argument("--base-url", type=str, default=None, help="OpenAI 兼容 API 地址（如 http://localhost:8050/v1）")
-    parser.add_argument("--api-key", type=str, default=None, help="API key（如 dummy-token）")
+    parser.add_argument("--api-key", type=str, default=None, help="API key（如 token-abc123）")
     parser.add_argument("--max-workers", type=int, default=1,
                         help="批处理并发数（1=顺序）。对齐 eval 用 32。")
     parser.add_argument("--list-presets", action="store_true", help="列出可用预设后退出")

@@ -41,8 +41,8 @@ def make_patch(diagnosis: Diagnosis) -> List[Dict[str, Any]]:
             "path": "/reactant_side_participants/-",
             "value": compound,
             "reason": (
-                "Including this reagent on the reactant side increases RXNMapper "
-                f"confidence from {base.confidence:.3f} to {best.confidence:.3f}."
+                "Source-supported atom contributor; carbon coverage is checked independently. "
+                f"RXNMapper confidence: {base.confidence:.3f} -> {best.confidence:.3f}."
             ),
         }
     ]

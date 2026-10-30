@@ -11,11 +11,15 @@ Subcommands:
     validate     — M4: field-constraint check + RXNMapper mapping screening
     standardize  — compatibility entry for standalone compound standardization
     chain        — run multiple modules on a single text segment
+    pdf          — extract PDF text and images for M1/M2 (MinerU VLM by default)
+    document     — segment a whole PDF/MinerU extraction and run M1/M3/M4 per procedure
 
 Examples:
     python run_pipeline.py extract --text "..." --task both --language zh
     python run_pipeline.py extract --input segs.jsonl --output preds.jsonl
     python run_pipeline.py image --image-base <dir>
+    python run_pipeline.py pdf --pdf document.pdf --output-dir pdf_out --language en
+    python run_pipeline.py document --content-list patent_content_list.json --output-dir patent_out --prepare-only
     python run_pipeline.py standardize --input extraction.json --output std.json
     python run_pipeline.py coref --ner-result ner.json --dict-result dict.json
     python run_pipeline.py validate --ner-result std.json
@@ -32,9 +36,6 @@ import os
 import sys
 from typing import List
 
-from loguru import logger
-
-
 # subcommand → module path (imported lazily)
 _FORWARD = {
     "extract": "pipeline.extraction.run_extraction",
@@ -42,6 +43,8 @@ _FORWARD = {
     "standardize": "pipeline.standardize.run_standardize",
     "coref": "pipeline.coref.run_coref",
     "validate": "pipeline.validation.run_validation",
+    "pdf": "pipeline.pdf.run_pdf",
+    "document": "pipeline.document.run_document",
 }
 
 _CHAIN_MODULES = ("extract", "image", "coref", "validate", "standardize")
@@ -67,6 +70,8 @@ def _forward(cmd: str, rest: List[str]) -> None:
 
 
 def _chain_main(rest: List[str]) -> None:
+    from loguru import logger
+
     parser = argparse.ArgumentParser(
         prog="run_pipeline.py chain",
         description="Run chained modules on a single clean text segment.",

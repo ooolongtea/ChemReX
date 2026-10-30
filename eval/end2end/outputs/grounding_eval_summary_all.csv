@@ -1,0 +1,2 @@
+dataset,n_samples,n_gold_identifiers,text_id_p,text_id_r,text_id_f1,label_det_p,label_det_r,label_det_f1,label_ocr_em,label_cer,molbox_p,molbox_r,molbox_f1,ocsr_valid_rate,ocsr_strict_exact,ocsr_relaxed_exact,link_p,link_r,link_f1,grounding_p,grounding_r,grounding_f1,grounding_relaxed_f1,e2e_acc
+openexp_500_all,500,1640,0.8940,0.9641,0.9277,1.0000,0.9872,0.9936,1.0000,0.0000,0.9975,0.9848,0.9911,0.9740,0.7722,0.9140,0.9975,0.9848,0.9911,0.8131,0.5146,0.6303,0.6600,0.5140

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from .build_candidates import build_candidates
 from .diagnose import Diagnosis
-from .map_score import MappingScorer
 from .normalize import normalize_reaction
 from .patch import apply_patch
+from .atom_sources import check_atom_sources
+
+if TYPE_CHECKING:
+    from .map_score import MappingScorer
 
 
 def verify_patch(
@@ -31,7 +34,10 @@ def verify_patch(
 
     before = diagnosis.base_candidate.confidence if diagnosis.base_candidate else 0.0
     after = base.confidence if base else 0.0
-    accepted = bool(base and after >= confidence_threshold and after - before >= confidence_delta)
+    source_repair = diagnosis.reason == "source_supported_reagent_closes_carbon_gap"
+    accepted = bool(base and after >= confidence_threshold and
+                    check_atom_sources(base.expression, base.mapped_rxn)["status"] == "complete"
+                    and (source_repair or after - before >= confidence_delta))
     info = {
         "accepted": accepted,
         "mapping_confidence_before": before,

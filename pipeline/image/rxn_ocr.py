@@ -28,6 +28,8 @@ except ImportError:
     Chem = None
 
 from .mol_ocr import MolOCR
+from pipeline.image_batch_retry import predict_with_backoff
+from pipeline.chemical_quality import valid_image_smiles, valid_reaction_sides, condition_quality
 
 
 def _resolve_rxnscribe_ckpt() -> str:
@@ -94,24 +96,29 @@ class RxnOCR:
             return smi
         try:
             mol = Chem.MolFromSmiles(smi)
-            if mol:
+            if mol and valid_image_smiles(smi):
                 return Chem.MolToSmiles(mol, canonical=True)
         except Exception:
             pass
-        return smi
+        return ""
 
     def _call_paddle_ocr(self, image_paths: List[str]) -> List[str]:
         try:
             env = os.environ.copy()
             paddle_gpu = os.environ.get("PADDLE_OCR_GPU")
-            if paddle_gpu:
+            if paddle_gpu and not env.get("CUDA_VISIBLE_DEVICES"):
                 env["CUDA_VISIBLE_DEVICES"] = str(paddle_gpu)
-            cmd = ["conda", "run", "-n", self.paddle_env, "python", self.paddle_ocr_script, "--json"] + image_paths
+            paddle_python = os.environ.get("PADDLE_PYTHON")
+            cmd = ([paddle_python] if paddle_python else
+                   ["conda", "run", "-n", self.paddle_env, "python"])
+            cmd += [self.paddle_ocr_script, "--json"] + image_paths
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
             return json.loads(result.stdout.strip())
-        except Exception as e:
-            logger.error(f"Paddle OCR failed: {e}")
-            return ["UNKNOWN"] * len(image_paths)
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or exc.stdout or str(exc)).strip()[-600:]
+            raise RuntimeError(f"Paddle OCR subprocess failed: {detail}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Paddle OCR failed: {exc}") from exc
 
     def predict_images(
         self,
@@ -129,16 +136,20 @@ class RxnOCR:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-        try:
-            preds = self.model.predict_image_files(files, batch_size=batch_size, molscribe=False, ocr_type=None)
-            if len(preds) != len(files):
-                raise RuntimeError(f"Batch count mismatch: {len(preds)} != {len(files)}")
-        except (RuntimeError, KeyError, ValueError, IndexError) as e:
+        def clear_cache():
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-            logger.error(f"Batch detection failed: {str(e)[:200]}")
-            return [{"image": f, "result": []} for f in files]
+
+        preds, failed_images = predict_with_backoff(
+            files,
+            lambda subset, size: self.model.predict_image_files(
+                subset, batch_size=size, molscribe=False, ocr_type=None),
+            batch_size, [], clear_cache,
+        )
+        for failure in failed_images:
+            logger.error("reaction detection failed for {}: {}", failure["image"], failure["error"])
+        failed_by_name = {item["image"]: item["error"] for item in failed_images}
 
         mol_bbox_map: Dict = {}
         txt_bbox_map: Dict = {}
@@ -151,6 +162,7 @@ class RxnOCR:
             try:
                 img = cv2.imread(image_path)
                 if img is None:
+                    failed_by_name[image_path] = "unreadable image"
                     continue
                 h, w = img.shape[:2]
                 for rxn_idx, rxn in enumerate(pred):
@@ -235,8 +247,8 @@ class RxnOCR:
                 for bbox_key, text in zip(txt_keys, txt_ocr_results):
                     if text and text.upper() != "UNKNOWN":
                         txt_results[bbox_key] = text.strip()
-            except Exception as e:
-                logger.error(f"Batch OCR failed: {str(e)[:150]}")
+            except Exception as exc:
+                raise RuntimeError(f"reaction-text OCR failed: {exc}") from exc
 
         for img_idx, category, rxn_idx, item_idx, type_, bbox_key in position_to_bbox:
             try:
@@ -261,7 +273,8 @@ class RxnOCR:
 
         total_time = time.time() - start_time
         logger.debug(f"RxnOCR done | {total_time:.1f}s | imgs={len(files)} | mol={len(mol_results)} | txt={len(txt_results)}")
-        return [{"image": f, "result": r} for f, r in zip(files, preds)]
+        return [{"image": f, "result": r, **({"error": failed_by_name[f]}
+                if f in failed_by_name else {})} for f, r in zip(files, preds)]
 
     def predict_dir(self, dir_path: str, batch_size: Optional[int] = None, recursive: bool = True,
                     patterns: Optional[List[str]] = None, molscribe: bool = False,
@@ -302,9 +315,15 @@ def flatten_reactions(raw_results: List[Dict[str, Any]]) -> List[Dict[str, str]]
                         cond_items.append(s)
                 elif isinstance(txt, str) and txt.strip():
                     cond_items.append(txt.strip())
+            if not valid_reaction_sides(react_smiles, prod_smiles):
+                continue
+            if set(react_smiles) == set(prod_smiles):
+                continue
+            conditions = ";".join(cond_items)
             flattened.append({
                 "reactants": ";".join(react_smiles),
                 "products": ";".join(prod_smiles),
-                "conditions": ";".join(cond_items),
+                "conditions": conditions,
+                "condition_quality": condition_quality(conditions),
             })
     return flattened

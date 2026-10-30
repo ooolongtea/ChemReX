@@ -9,8 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
-_TEMP_RE = re.compile(r"(℃|°C|°F|K\b|room|reflux|回流|室温|常温|heat|加热|冰|盐浴|液氮)", re.IGNORECASE)
-_TIME_RE = re.compile(r"(h\b|hr\b|hour|min\b|minute|day|overnight|过夜|小时|分钟|天|秒|sec\b)", re.IGNORECASE)
+_TEMP_RE = re.compile(r"(℃|°C|°F|K\b|\br\.?\s*t\.?(?!\w)|ambient|room|reflux|回流|室温|常温|环境温度|heat|加热|冰|盐浴|液氮)", re.IGNORECASE)
+_TIME_RE = re.compile(r"(h\b|hr\b|hour|min\b|minute|day|overnight|过夜|小时|分钟|天|秒|sec\b|(?:直至|直到)完成|until.{0,45}complet(?:e|ion))", re.IGNORECASE)
 _NUM_RE = re.compile(r"\d+(?:\.\d+)?")
 
 
@@ -66,11 +66,13 @@ def check_constraints(record: Dict[str, Any]) -> Dict[str, Any]:
     # 4. Yield range (0-100)
     yld = ner.get("YIELD_PERCENT")
     if yld is not None:
-        try:
-            y = float(str(yld).replace("%", "").strip())
-            if y < 0 or y > 100:
+        from pipeline.extraction.yield_values import parse_yield_value
+        parsed = parse_yield_value(yld)
+        if parsed:
+            values = list(parsed['range'].values()) if parsed['range'] else [parsed['value']]
+            if any(y < 0 or y > 100 for y in values) or (parsed['range'] and values[0] > values[1]):
                 issues.append({"field": "YIELD_PERCENT", "type": "range", "message": f"yield out of 0-100 range: {yld!r}"})
-        except (ValueError, TypeError):
+        else:
             issues.append({"field": "YIELD_PERCENT", "type": "format", "message": f"yield not numeric: {yld!r}"})
 
     # 5. Action sequence non-empty (informational)

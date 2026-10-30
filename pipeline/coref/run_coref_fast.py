@@ -21,6 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
+from pipeline.chemical_quality import image_label_evidence
 from .coref_resolver import (
     _COMPOUND_FIELDS,
     _compound_name,
@@ -61,11 +62,14 @@ def _load_dict_per_record(path: str) -> Dict[int, Dict[str, str]]:
         data = json.load(f)
     mapping: Dict[int, Dict[str, str]] = {}
     if isinstance(data, dict) and "per_image_detections" in data:
+        images_by_index = {}
         for item in data["per_image_detections"]:
             fname = item.get("image_file_name", "")
             idx = _extract_index_from_filename(fname)
             if idx is not None:
-                mapping[idx] = item.get("dict_result") or {}
+                images_by_index.setdefault(idx, []).append(item)
+        for idx, items in images_by_index.items():
+            mapping[idx] = image_label_evidence(items)['dict_result']
     elif isinstance(data, dict):
         for k, v in data.items():
             try:

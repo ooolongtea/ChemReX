@@ -487,7 +487,7 @@ if __name__ == "__main__":
     parser.add_argument("--raw", required=True, help="Path to predictions_raw.jsonl")
     parser.add_argument("--out", required=True, help="Path to output predictions.jsonl")
     parser.add_argument("--base_url", default="http://localhost:8050/v1", help="vLLM base URL")
-    parser.add_argument("--api_key", default="dummy-token", help="API key")
+    parser.add_argument("--api_key", default="token-abc123", help="API key")
     parser.add_argument("--model", default="Qwen3-8B", help="Model name")
     parser.add_argument("--skip_standardize_names", action="store_true")
     parser.add_argument("--skip_standardize_time", action="store_true")

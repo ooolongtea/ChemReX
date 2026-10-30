@@ -66,7 +66,7 @@ class ChemReXPipeline:
     def _get_coref(self):
         if self._coref is None:
             from .coref.coref_resolver import CorefResolver
-            self._coref = CorefResolver()
+            self._coref = CorefResolver(standardizer=self._get_standardize())
         return self._coref
 
     def _get_validation(self):

@@ -11,7 +11,7 @@
 #   PORT                       服务端口（默认 8050）
 #   GPU_MEMORY_UTILIZATION     显存占用比例（默认 0.75）
 #   MAX_MODEL_LEN              最大模型长度（默认 32768）
-#   API_KEY                    API 鉴权密钥（默认 dummy-token）
+#   API_KEY                    API 鉴权密钥（默认 token-abc123）
 
 set -e
 
@@ -25,7 +25,7 @@ PORT="${PORT:-8050}"
 GPU_ID="${GPU_ID:-0}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.75}"
 MAX_MODEL_LEN="${MAX_MODEL_LEN:-32768}"
-API_KEY="${API_KEY:-dummy-token}"
+API_KEY="${API_KEY:-token-abc123}"
 
 if [[ ! -d "${MODEL_PATH}" ]]; then
   echo "错误: 基座模型不存在: ${MODEL_PATH}" >&2

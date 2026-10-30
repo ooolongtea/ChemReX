@@ -1,6 +1,7 @@
 {
   "compound_standardization": "v2",
   "coref_resolution": "v1",
+  "final_product_extraction": "v1",
   "ner_zh": "v1",
   "ner_en": "v1",
   "action_zh": "v1",

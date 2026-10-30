@@ -200,19 +200,20 @@ class PromptLoader:
         """
         content = self.get_content(prompt_name)
         
-        # 先处理 Jinja2 风格的 {{ variable }}
-        import re
-        for key, value in variables.items():
-            # 替换 {{ key }} 和 {{key}}（有无空格都支持）
-            pattern = r'\{\{\s*' + re.escape(key) + r'\s*\}\}'
-            content = re.sub(pattern, str(value), content)
-        
-        # 再尝试处理 Python format 风格的 {variable}（如果还有的话）
-        try:
-            content = content.format(**variables)
-        except (KeyError, ValueError):
-            # 如果还有未替换的变量，记录警告但继续
-            pass
+        # 两种占位符（{{ key }} / {key}）在一次 re.sub 里做字面替换：
+        # - 替换串经函数返回，不做反斜杠转义——正文里的 \m、\i 等不会再
+        #   触发 re.error: bad escape
+        # - 不再用 str.format()——正文自带的花括号（{1}、{x}）不会引发
+        #   IndexError/KeyError，也不会让整次替换失败后占位符留在 prompt 里
+        if variables:
+            import re
+            vars_str = {k: str(v) for k, v in variables.items()}
+            keys = "|".join(re.escape(k) for k in vars_str)
+            pattern = re.compile(
+                r"\{\{\s*(" + keys + r")\s*\}\}"      # Jinja2 风格
+                r"|(?<!\{)\{(" + keys + r")\}(?!\})"  # Python format 风格
+            )
+            content = pattern.sub(lambda m: vars_str[m.group(1) or m.group(2)], content)
         
         # 检查是否还有未替换的变量
         remaining = re.findall(r'\{\{\s*(\w+)\s*\}\}', content)

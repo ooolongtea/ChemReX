@@ -15,6 +15,7 @@ Reuses ``prompts/coref_resolution/v1.md`` (LLM semantic core-ID matching) + ``pi
 
 import json
 import re
+import os
 from copy import deepcopy
 from typing import Any, Dict, List, Tuple
 
@@ -56,6 +57,8 @@ def _looks_like_identifier(name: str) -> bool:
 def _is_identifier_compound(compound: Any) -> bool:
     """A compound is an identifier if labelled 'ID' (standardized) or matches the heuristic."""
     if isinstance(compound, dict):
+        if compound.get("identifier_only"):
+            return True
         std = (compound.get("standard_name") or "").strip()
         if std:
             return std.upper() == "ID"
@@ -72,7 +75,8 @@ def _compound_name(compound: Any) -> str:
 class CorefResolver:
     """Resolve compound identifiers in NER fields to SMILES from the image dictionary."""
 
-    def __init__(self, model: str = None, temperature: float = None, auto_standardize: bool = None):
+    def __init__(self, model: str = None, temperature: float = None, auto_standardize: bool = None,
+                 standardizer=None):
         loader = PromptLoader()
         prompt_data = loader.load_prompt("coref_resolution")
         self.loader = loader
@@ -89,8 +93,9 @@ class CorefResolver:
             if auto_standardize is not None
             else getattr(config, "COREF_AUTO_STANDARDIZE", True)
         )
-        self._standardizer = None
-        self.api = GPTAPI(model=model, temperature=temperature)
+        self._standardizer = standardizer
+        self.api = GPTAPI(model=model, temperature=temperature,
+                          provider=os.getenv("COREF_PROVIDER") or None)
         logger.debug(f"CorefResolver ready: model={model}, auto_standardize={self.auto_standardize}")
 
     def resolve(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -167,12 +172,13 @@ class CorefResolver:
             return record, "disabled"
         try:
             standardized = self.standardizer.standardize(record)
-            for key in ("text", "reference"):
+            for key in record:
                 if key in record and key not in standardized:
                     standardized[key] = record[key]
             return standardized, "applied"
         except Exception as exc:
             logger.error(f"coref standardize failed; falling back to raw NER: {exc}")
+            record["standardize_error"] = f"{type(exc).__name__}: {exc}"
             return record, "failed"
 
     @staticmethod
@@ -217,27 +223,34 @@ class CorefResolver:
             text_identifiers=json.dumps(text_ids, ensure_ascii=False),
             dict_keys=json.dumps(dict_keys, ensure_ascii=False),
         )
-        try:
-            response = self.api.chat(prompt)
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if 0 <= start < end:
+        # A transport-level failure (timeout / 429 / network) must propagate:
+        # swallowing it here would return an empty mapping, the chunk would
+        # be recorded ok and the whole ID→SMILES mapping silently lost
+        # (doc/batch-code-review-round2.md H4).
+        response = self.api.chat(prompt)
+        start = response.find("{")
+        end = response.rfind("}") + 1
+        if 0 <= start < end:
+            try:
                 data = json.loads(response[start:end])
-                mapping = data.get("mapping", {}) or {}
-                logger.debug(f"LLM mapping: {len(mapping)} pairs")
-                return {
-                    str(k): str(v)
-                    for k, v in mapping.items()
-                    if k in text_identifiers and v in dict_result
-                }
-            logger.warning("coref LLM returned no parseable JSON; falling back to empty mapping")
-            return {}
-        except json.JSONDecodeError:
-            logger.warning("coref LLM JSON decode failed; empty mapping")
-            return {}
-        except Exception as exc:
-            logger.error(f"coref LLM failed: {exc}")
-            return {}
+            except json.JSONDecodeError:
+                logger.warning("coref LLM JSON decode failed; empty mapping")
+                return {}
+            mapping = data.get("mapping", {}) or {}
+            if not isinstance(mapping, dict):
+                logger.warning('coref LLM mapping is not an object; leaving identifiers unresolved')
+                return {}
+            logger.debug(f"LLM mapping: {len(mapping)} pairs")
+            return {
+                str(k): str(v)
+                for k, v in mapping.items()
+                # A model sometimes returns a list of alternatives. Never
+                # use it as a hash key or choose one of those alternatives.
+                if k in text_identifiers and isinstance(v, (str, int))
+                and not isinstance(v, bool) and str(v) in dict_result
+            }
+        logger.warning("coref LLM returned no parseable JSON; falling back to empty mapping")
+        return {}
 
     def _apply_mapping(
         self, ner: Dict[str, Any], mapping: Dict[str, str], dict_result: Dict[str, str]
@@ -260,6 +273,7 @@ class CorefResolver:
                     if isinstance(comp, dict):
                         comp["smiles"] = smiles
                         comp["dict_key"] = dict_key
+                        comp["structure_source"] = "image_identifier"
                     resolved += 1
                 else:
                     unresolved.append(name)
@@ -275,9 +289,9 @@ class CorefResolver:
             "ner": record.get("ner", {}) or {},
             "standardize_status": standardize_status,
         }
-        for key in ("action", "language", "task", "text", "reference"):
-            if key in record:
-                result[key] = record[key]
+        for key, value in record.items():
+            if key not in result and key != "dict_result":
+                result[key] = deepcopy(value)
         return result
 
     @classmethod

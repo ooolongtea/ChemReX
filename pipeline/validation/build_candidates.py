@@ -33,12 +33,14 @@ class ReactionCandidate:
     error: str = ""
 
     def to_public_dict(self) -> Dict[str, Any]:
+        from .atom_sources import check_atom_sources
         return {
             "kind": self.kind,
             "expression": self.expression,
             "confidence": self.confidence,
             "mapped_rxn": self.mapped_rxn,
             "error": self.error,
+            "atom_source_check": check_atom_sources(self.expression, self.mapped_rxn),
             "added_compound": self.added_compound.to_public_dict() if self.added_compound else None,
             "left_compounds": [compound.to_public_dict() for compound in self.left_compounds],
             "products": [compound.to_public_dict() for compound in self.products],
@@ -74,7 +76,7 @@ def _compound_mentions_text(compound: NormalizedCompound) -> List[str]:
 
 def _appears_before_workup(compound: NormalizedCompound, context: str) -> bool:
     if not context:
-        return True
+        return False
     lower_context = context.lower()
     mention_positions = []
     for mention in _compound_mentions_text(compound):
@@ -82,7 +84,7 @@ def _appears_before_workup(compound: NormalizedCompound, context: str) -> bool:
         if pos >= 0:
             mention_positions.append(pos)
     if not mention_positions:
-        return True
+        return False
     mention_pos = min(mention_positions)
     workup_positions = [
         lower_context.find(word.lower()) for word in WORKUP_WORDS
@@ -93,10 +95,10 @@ def _appears_before_workup(compound: NormalizedCompound, context: str) -> bool:
 
 def _has_reaction_context(compound: NormalizedCompound, context: str) -> bool:
     if not context:
-        return True
+        return False
     lower_context = context.lower()
     if not any(mention.lower() in lower_context for mention in _compound_mentions_text(compound)):
-        return True
+        return False
     pattern = "|".join(re.escape(word.lower()) for word in ACTION_WORDS)
     for mention in _compound_mentions_text(compound):
         pos = lower_context.find(mention.lower())
@@ -121,7 +123,8 @@ def select_reagent_candidates(
         if not _has_reaction_context(compound, context):
             continue
         candidates.append(compound)
-    return candidates[:max_candidates]
+    # Do not silently exclude a carbon donor because it follows three auxiliaries.
+    return candidates
 
 
 def build_candidates(

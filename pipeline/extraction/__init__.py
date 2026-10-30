@@ -9,7 +9,7 @@ Aligned with eval main experiment (eval/evaluate.py build_user_content contract)
 Model selection:
 - default: config.EXTRACTION_MODEL (e.g. deepseek-v3.2) via OpenAI-compatible API
 - --preset qwen3-lora-08: Qwen3-8B + LoRA adapter 0.8 served by vLLM, aligned with
-  eval/vllm_lora_reproduce.md (base_url=http://localhost:8050/v1, api_key=dummy-token)
+  eval/vllm_lora_reproduce.md (base_url=http://localhost:8050/v1, api_key=token-abc123)
 """
 from .extractor import ChemReXExtractor
 

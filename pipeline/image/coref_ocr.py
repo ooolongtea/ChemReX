@@ -28,6 +28,8 @@ except ImportError:
     Chem = None
 
 from .mol_ocr import MolOCR
+from pipeline.image_batch_retry import predict_with_backoff
+from pipeline.chemical_quality import normalize_image_label, valid_image_smiles
 
 
 def _resolve_moldetect_ckpt() -> str:
@@ -109,16 +111,16 @@ class DictGenerator:
         if y2 <= y1: y2 = min(h - 1, y1 + 1)
         return x1, y1, x2, y2
 
-    def _canon_smiles(self, smi: str) -> str:
+    def _canon_smiles(self, smi: str, allow_markush: bool = False) -> str:
         if not smi or Chem is None:
             return smi
         try:
             mol = Chem.MolFromSmiles(smi)
-            if mol:
+            if mol and valid_image_smiles(smi, allow_markush=allow_markush):
                 return Chem.MolToSmiles(mol, canonical=True)
         except Exception:
             pass
-        return smi
+        return ""
 
     def _call_paddle_ocr(self, image_paths: List[str]) -> List[str]:
         try:
@@ -126,12 +128,17 @@ class DictGenerator:
             paddle_gpu = os.environ.get("PADDLE_OCR_GPU")
             if paddle_gpu and not env.get("CUDA_VISIBLE_DEVICES"):
                 env["CUDA_VISIBLE_DEVICES"] = str(paddle_gpu)
-            cmd = ["conda", "run", "-n", self.paddle_env, "python", self.paddle_ocr_script, "--json"] + image_paths
+            paddle_python = os.environ.get("PADDLE_PYTHON")
+            cmd = ([paddle_python] if paddle_python else
+                   ["conda", "run", "-n", self.paddle_env, "python"])
+            cmd += [self.paddle_ocr_script, "--json"] + image_paths
             result = subprocess.run(cmd, capture_output=True, text=True, check=True, env=env)
             return json.loads(result.stdout.strip())
-        except Exception as e:
-            logger.error(f"Paddle OCR failed: {e}")
-            return ["UNKNOWN"] * len(image_paths)
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or exc.stdout or str(exc)).strip()[-600:]
+            raise RuntimeError(f"Paddle OCR subprocess failed: {detail}") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Paddle OCR failed: {exc}") from exc
 
     def generate_batch_fused(
         self,
@@ -150,16 +157,20 @@ class DictGenerator:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
-        try:
-            detections = self.coref_ocr.predict_batch(
-                image_paths, batch_size=batch_size, coref=True, molscribe=False, ocr=False
-            )
-        except (RuntimeError, KeyError, ValueError, IndexError) as e:
+        def clear_cache():
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-            logger.error(f"Batch detection failed: {str(e)[:200]}")
-            return {"map": {}, "total_pairs": 0, "failed_count": 0, "source_count": len(image_paths)}
+
+        detections, failed_images = predict_with_backoff(
+            image_paths,
+            lambda subset, size: self.coref_ocr.predict_batch(
+                subset, batch_size=size, coref=True, molscribe=False, ocr=False),
+            batch_size or 16, {"bboxes": [], "corefs": []}, clear_cache,
+        )
+        for failure in failed_images:
+            logger.error("dictionary detection failed for {}: {}",
+                         failure["image"], failure["error"])
 
         all_mol_crops: List[str] = []
         all_idt_crops: List[str] = []
@@ -177,12 +188,13 @@ class DictGenerator:
             try:
                 img = cv2.imread(image_path)
                 if img is None:
+                    failed_images.append({"image": image_path, "error": "unreadable image"})
                     continue
                 h, w = img.shape[:2]
+                image_meta[img_idx] = (os.path.basename(image_path), w, h)
                 bboxes = detection.get("bboxes", [])
                 corefs = detection.get("corefs", [])
-                if not bboxes or not corefs:
-                    continue
+                paired_molecules = set()
                 for pair_idx, pair in enumerate(corefs):
                     if not isinstance(pair, (list, tuple)) or len(pair) != 2:
                         continue
@@ -237,18 +249,47 @@ class DictGenerator:
                         image_meta[img_idx] = (os.path.basename(image_path), w, h)
                         global_mol_id += 1
                         global_idt_id += 1
+                        paired_molecules.add(local_mol_idx)
+                # A molecule need not have a printed identifier. Coreference
+                # links define dictionary entries, not the existence of a
+                # molecule detection (US8927710, Example 210).
+                for local_idx, mol_rec in enumerate(bboxes):
+                    if mol_rec.get('category_id') != self.mol_category_id or local_idx in paired_molecules:
+                        continue
+                    bbox = mol_rec.get('bbox')
+                    if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
+                        continue
+                    x1, y1, x2, y2 = self._bbox_norm_to_px(bbox, w, h)
+                    if x2 - x1 < 5 or y2 - y1 < 5:
+                        continue
+                    crop_path = os.path.join(tmp_dir, f'img{img_idx:04d}_unpaired_m{local_idx:03d}.png')
+                    if cv2.imwrite(crop_path, img[y1:y2, x1:x2]):
+                        all_mol_crops.append(crop_path)
+                        mol_to_result.append((img_idx, global_mol_id))
+                        mol_bbox_records.append((img_idx, global_mol_id, (x1, y1, x2, y2)))
+                        global_mol_id += 1
             except Exception as e:
                 logger.error(f"Image [{img_idx}] error: {str(e)[:150]}")
                 continue
 
         mol_results: Dict[int, str] = {}
+        # Markush fallback: a scheme figure's general structure fails the
+        # strict gate but stays valid as an image-side identifier. Keep it
+        # for molecule_boxes (the document stage rebuilds label→structure
+        # from the geometry); the dictionaries stay concrete-only.
+        mol_markush: Dict[int, str] = {}
         if all_mol_crops:
             try:
                 mol_ocr_results = self.mol_ocr.predict_batch(all_mol_crops, return_atoms_bonds=False, return_confidence=False)
                 for (img_idx, gmid), result in zip(mol_to_result, mol_ocr_results):
                     smiles = result.get("smiles")
                     if smiles:
-                        mol_results[gmid] = self._canon_smiles(smiles)
+                        canon = self._canon_smiles(smiles)
+                        mol_results[gmid] = canon
+                        if not canon:
+                            fallback = self._canon_smiles(smiles, allow_markush=True)
+                            if fallback:
+                                mol_markush[gmid] = fallback
             except Exception as e:
                 logger.error(f"Batch MolOCR failed: {str(e)[:150]}")
 
@@ -256,9 +297,8 @@ class DictGenerator:
         if all_idt_crops and self.use_paddle_ocr:
             try:
                 idt_ocr_texts = self._call_paddle_ocr(all_idt_crops)
-            except Exception as e:
-                logger.error(f"Batch OCR failed: {str(e)[:150]}")
-                idt_ocr_texts = ["UNKNOWN"] * len(all_idt_crops)
+            except Exception as exc:
+                raise RuntimeError(f"identifier OCR failed: {exc}") from exc
 
         fused_map: Dict[str, Any] = {}
         total_pairs = 0
@@ -270,7 +310,10 @@ class DictGenerator:
             if not smiles:
                 failed_count += 1
                 continue
-            ocr_text = " ".join(ocr_text.split())
+            ocr_text = normalize_image_label(ocr_text)
+            if not ocr_text:
+                failed_count += 1
+                continue
             total_pairs += 1
             if keep_duplicates:
                 if ocr_text in fused_map:
@@ -281,11 +324,7 @@ class DictGenerator:
                 else:
                     fused_map[ocr_text] = [smiles]
             else:
-                if ocr_text in fused_map:
-                    if random.random() < 0.5:
-                        fused_map[ocr_text] = smiles
-                else:
-                    fused_map[ocr_text] = smiles
+                fused_map.setdefault(ocr_text, smiles)
 
         if not self.keep_crops:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -294,14 +333,19 @@ class DictGenerator:
         if return_per_image:
             mol_by_img: Dict[int, List[Tuple[int, Tuple[int, int, int, int], str]]] = {}
             for (mi, gmid, bbox) in mol_bbox_records:
-                mol_by_img.setdefault(mi, []).append((gmid, bbox, mol_results.get(gmid, "")))
+                mol_by_img.setdefault(mi, []).append(
+                    (gmid, bbox, mol_results.get(gmid) or mol_markush.get(gmid, "")))
             idt_by_img: Dict[int, List[Tuple[int, int, Tuple[int, int, int, int], str]]] = {}
             for (mi, gidt, gmid, bbox), ocr_text in zip(idt_bbox_records, idt_ocr_texts):
                 idt_by_img.setdefault(mi, []).append((gidt, gmid, bbox, ocr_text or ""))
             for img_idx in range(len(image_paths)):
                 fname = os.path.basename(image_paths[img_idx])
                 meta = image_meta.get(img_idx)
-                w, h = (meta[1], meta[2]) if meta else (0, 0)
+                if meta:
+                    w, h = meta[1], meta[2]
+                else:
+                    image = cv2.imread(image_paths[img_idx])
+                    h, w = image.shape[:2] if image is not None else (0, 0)
                 mols_data = mol_by_img.get(img_idx, [])
                 idts_data = idt_by_img.get(img_idx, [])
                 molecule_boxes = []
@@ -315,7 +359,9 @@ class DictGenerator:
                 for gidt, gmid, bbox, ocr_text in idts_data:
                     if not ocr_text or ocr_text.upper() == "UNKNOWN":
                         continue
-                    ocr_text = " ".join(ocr_text.split())
+                    ocr_text = normalize_image_label(ocr_text)
+                    if not ocr_text:
+                        continue
                     label_idx = len(figure_labels)
                     figure_labels.append({"bbox_xyxy": list(bbox), "text": ocr_text})
                     if gmid in mol_gmid_to_idx:
@@ -339,6 +385,7 @@ class DictGenerator:
             "total_pairs": total_pairs,
             "failed_count": failed_count,
             "source_count": len(image_paths),
+            "failed_images": failed_images,
         }
         if return_per_image:
             result["per_image"] = per_image

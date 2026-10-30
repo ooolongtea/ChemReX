@@ -1,0 +1,17 @@
+[Unit]
+Description=ChemReX full-document API queue worker
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/chemrex
+EnvironmentFile=%h/.config/chemrex-api.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/env ${CHEMREX_TEXT_PYTHON} run_api.py worker
+Restart=always
+RestartSec=5
+TimeoutStopSec=infinity
+KillMode=mixed
+
+[Install]
+WantedBy=default.target

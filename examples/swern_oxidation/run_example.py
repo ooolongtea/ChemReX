@@ -20,7 +20,7 @@ import time
 
 # Make `import config` and `import pipeline` work when run from repo root.
 HERE = os.path.dirname(os.path.abspath(__file__))
-REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
+REPO = os.path.abspath(os.path.join(HERE, "..", ".."))  # xyq/ChemReX
 sys.path.insert(0, REPO)
 
 from pipeline.pipeline import ChemReXPipeline  # noqa: E402
